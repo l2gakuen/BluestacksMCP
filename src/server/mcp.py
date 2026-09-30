@@ -68,8 +68,8 @@ def build_mcp(core: AutomationCore, settings: Settings) -> MCPServer:
 
     @tool("android_dump_ui", "List all UI elements of the current screen as normalized JSON "
           "(text, content_desc, resource_id, class_name, clickable, enabled, visible, bounds).")
-    def _(device_id: Dev = None):
-        return core.dump_ui(device_id)
+    def _(device_id: Dev = None, timeout_ms: Timeout = None):
+        return core.dump_ui(device_id, timeout_ms)
 
     @tool("android_extract_text", "Parse on-screen data: visible text in reading order, optionally filtered by a regex.")
     def _(device_id: Dev = None, pattern: str | None = None):

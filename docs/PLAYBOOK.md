@@ -37,6 +37,12 @@ app that was explored (Grindr, `com.grindrapp.android`). Read this before touchi
 
 ## Gotchas (learned on the real device)
 
+0. **Keep the host awake**: a Windows/BlueStacks **screensaver or sleep makes screenshots and dumps hang or time out**
+   (the requests then pile up behind the per-device lock and everything looks dead for a minute or two). Disable the
+   screensaver/sleep on the host before long sessions.
+0b. Screens with animation or a focused blinking text field, and the chat thread, can make `uiautomator dump` exceed the
+   10 s action timeout. Retry with `GET ui?timeout_ms=30000` (or the MCP `timeout_ms`), else use a screenshot.
+
 1. **UI dump is flaky** on busy/animated screens (video, transitions): `UI_AUTOMATION_ERROR` with empty `device_output`, or
    `TIMEOUT`. The core now retries 3x; still, wait ~2 s after navigation and retry the call. Screenshots keep working
    when the dump doesn't, use them to see the screen, and coordinates as the fallback.
@@ -72,7 +78,16 @@ Recipe: `{"selector":{"label":"revenir en haut du fil","partial":true}}`, or `sc
 filter chips `non lu`, `Distance`, `En ligne`, `Position`. Each conversation row = clickable `View` (~[0,y,900,y+144],
 step 146 px) + avatar `View` + `TextView`s: name, last-message preview, relative time (`41 min`, `3 h`), unread count.
 Albums sub-tab: `MISES À JOUR`, `Mettre à jour votre album`, `TOUS LES ALBUMS`, `Créer un album`.
-The chat thread view itself was **not** mapped yet.
+The chat thread is mapped below (from a screenshot: its UI dump kept timing out).
+
+**Chat thread** (`.chat.presentation.ui.ChatActivityV2`, screen 900x1600; positions from a screenshot, not from a dump):
+- Header: back arrow (~40,84), contact avatar with green "online" dot (~120,84), distance text ("à 3 km", ~183,98), overflow menu ⋮ (~852,84).
+- Message list, newest at the bottom: a date separator ("Aujourd'hui", centered), **sent** bubbles yellow and right-aligned with the
+  time under them, **received** bubbles blue and left-aligned with time + hint "Touchez deux fois pour aimer" (double tap = like).
+  A system card "Accusés de lecture gratuits" (watch a video to unlock read receipts) can sit between messages.
+- Input field "Dis quelque chose…" (~[24,1432,876,1516]) with a mic on the right; a send arrow replaces the mic once text is typed.
+- Bottom action row (y~1558): camera (~113), emoji (~338), send location (~562), saved phrases/quotes (~788).
+- Reading a thread: use `screenshot` (the dump is unreliable here) or `GET ui?timeout_ms=30000`.
 
 ## Recipes (REST `POST workflows`, or the same steps as separate tool calls)
 

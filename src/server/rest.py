@@ -5,7 +5,7 @@ import uuid
 
 from src.core.context import request_id
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 
@@ -94,9 +94,10 @@ def create_app(core: AutomationCore, settings: Settings) -> FastAPI:
         return Response(core.screenshot(device_id), media_type="image/png")
 
     @app.get("/api/v1/devices/{device_id}/ui")
-    def ui(device_id: str, client: str = Depends(auth)):
+    def ui(device_id: str, timeout_ms: int | None = Query(default=None, ge=100, le=60000),
+           client: str = Depends(auth)):
         guard(client, device_id, "android_dump_ui")
-        return core.dump_ui(device_id)
+        return core.dump_ui(device_id, timeout_ms)
 
     @app.get("/api/v1/devices/{device_id}/apps")
     def apps(device_id: str, include_system: bool = False, client: str = Depends(auth)):

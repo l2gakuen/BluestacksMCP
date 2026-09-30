@@ -77,3 +77,8 @@ def test_per_device_lock_serializes(core):
     ts = [threading.Thread(target=core.tap, args=("bs1", 1, 1)) for _ in range(3)]
     [t.start() for t in ts]; [t.join() for t in ts]
     assert order == ["start", "end"] * 3
+
+
+def test_ui_timeout_param(client):
+    assert client.get("/api/v1/devices/bs1/ui?timeout_ms=30000", headers=H).status_code == 200
+    assert client.get("/api/v1/devices/bs1/ui?timeout_ms=5", headers=H).status_code == 400
