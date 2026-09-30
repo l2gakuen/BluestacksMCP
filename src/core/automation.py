@@ -245,3 +245,65 @@ class AutomationCore:
         r = self.wait_for_element(device_id, Selector(text=text), timeout_ms)
         r["action"], r["target"] = "wait_for_text", text
         return r
+
+    # ---- app listing
+    def list_apps(self, device_id, include_system: bool = False, timeout_ms=None) -> dict:
+        with self._op(device_id, "list_apps") as (did, ser):
+            args = ["pm", "list", "packages"] + ([] if include_system else ["-3"])
+            out = self.adb.shell(ser, args, self._timeout(timeout_ms))
+        pkgs = sorted(l[8:].strip() for l in out.splitlines() if l.startswith("package:"))
+        return {"device_id": did, "packages": pkgs}
+
+    # ---- data parsing
+    def extract_text(self, device_id, pattern: str | None = None, timeout_ms=None) -> dict:
+        """Visible on-screen text/content-desc in reading order (top->bottom, left->right); optional regex filter."""
+        import re
+        try:
+            rx = re.compile(pattern) if pattern else None
+        except re.error as e:
+            raise AutomationError("INVALID_ACTION", f"Bad regex: {e}")
+        with self._op(device_id, "extract_text") as (did, ser):
+            els = self._dump(ser, timeout_ms)
+        items = sorted((e for e in els if e["visible"] and (e["text"] or e["content_desc"])),
+                       key=lambda e: (e["bounds"][1], e["bounds"][0]))
+        out = [{"text": e["text"] or e["content_desc"], "resource_id": e["resource_id"],
+                "bounds": e["bounds"]} for e in items]
+        if rx:
+            out = [o for o in out if rx.search(o["text"])]
+        return {"device_id": did, "items": out}
+
+    # ---- gestures
+    def _screen_size(self, ser: str) -> tuple[int, int]:
+        out = self.adb.shell(ser, ["wm", "size"], self._timeout(None))
+        for tok in reversed(out.split()):
+            if "x" in tok:
+                try:
+                    w, h = tok.split("x")
+                    return int(w), int(h)
+                except ValueError:
+                    pass
+        raise AutomationError("ADB_ERROR", "Could not read screen size.")
+
+    def scroll(self, device_id, direction: str, distance_pct: int = 50, duration_ms: int = 400, timeout_ms=None):
+        """direction = which way the content moves' *view* goes (down = see content further down)."""
+        if direction not in ("up", "down", "left", "right"):
+            raise AutomationError("INVALID_ACTION", "direction must be up/down/left/right.")
+        t0 = time.monotonic()
+        with self._op(device_id, "scroll", direction=direction) as (did, ser):
+            w, h = self._screen_size(ser)
+            cx, cy, d = w // 2, h // 2, distance_pct / 100
+            dx, dy = int(w * d / 2), int(h * d / 2)
+            # finger moves opposite to the direction the view scrolls
+            x1, y1, x2, y2 = {"down": (cx, cy + dy, cx, cy - dy), "up": (cx, cy - dy, cx, cy + dy),
+                              "right": (cx + dx, cy, cx - dx, cy), "left": (cx - dx, cy, cx + dx, cy)}[direction]
+            self.adb.shell(ser, ["input", "swipe", *map(str, (x1, y1, x2, y2, duration_ms))],
+                           self._timeout(timeout_ms) + duration_ms / 1000)
+        return self._result(did, "scroll", t0, target=direction)
+
+    def pull_to_refresh(self, device_id, timeout_ms=None):
+        t0 = time.monotonic()
+        with self._op(device_id, "pull_to_refresh") as (did, ser):
+            w, h = self._screen_size(ser)
+            self.adb.shell(ser, ["input", "swipe", str(w // 2), str(h // 5), str(w // 2), str(h * 3 // 5), "500"],
+                           self._timeout(timeout_ms) + 0.5)
+        return self._result(did, "pull_to_refresh", t0)

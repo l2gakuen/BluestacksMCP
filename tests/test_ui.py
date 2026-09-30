@@ -61,3 +61,19 @@ def test_wait_and_set_text(core, runner):
     core.set_text("bs1", {"resource_id": "com.example:id/login"}, "hi")
     sh = [c[c.index("shell") + 1:] for c in runner.calls if "shell" in c]
     assert ["input", "keyevent", "123", "67", "67", "67", "67", "67"] in sh and ["input", "text", "hi"] in sh
+
+
+def test_list_apps_extract_scroll(core, runner):
+    runner.ui_xml = XML
+    assert core.extract_text("bs1")["items"][0]["text"] == "Login"
+    assert [i["text"] for i in core.extract_text("bs1", "^Lo")["items"]] == ["Login", "Login"]
+    with pytest.raises(AutomationError):
+        core.extract_text("bs1", "(")
+    assert core.list_apps("bs1")["packages"] == []
+    orig = runner.__call__
+    runner.__class__.__call__ = lambda self, a, t: (0, b"Physical size: 1080x1920", b"") if "wm" in a else orig(a, t)
+    core.scroll("bs1", "down")
+    core.pull_to_refresh("bs1")
+    sw = [c[-5:] for c in runner.calls if "swipe" in c]
+    assert sw[0] == ["540", "1440", "540", "480", "400"] and sw[1][1] == "384"
+    runner.__class__.__call__ = orig.__func__ if hasattr(orig, "__func__") else orig
