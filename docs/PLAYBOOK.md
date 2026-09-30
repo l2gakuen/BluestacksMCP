@@ -148,7 +148,8 @@ Only when the user asks for it, with their exact text. Per profile:
 2. Open the chat **from the profile**: `click_element` `{"resource_id":"com.grindrapp.android:id/quickbar_btn_chat"}`
    (full id on old hosts) -> wait ~4 s -> activity must be `ChatActivityV2`. Only now write; not in the profile quick bar
    (typing there was unreliable: the field stayed empty).
-3. `tap` the input (450,1474), then `type` the text (`set_text` is not reliable here), then `tap` the send arrow (840,1476).
+3. In the chat, write with **UI elements** whenever the dump works (`click_element` on the `EditText`, `type`, then click the send button found in the dump).
+   The chat dump times out on hosts without the `timeout_ms` update; only then fall back to coordinates: input (450,1474), send arrow (840,1476).
 4. `BACK` twice (chat -> profile -> grid), check `HomeActivityOriginal`. Abort at the first unexpected activity.
 5. Verify without screenshots: inbox tab (`content_desc` "Onglet Boîte de réception") + sub-tab text "Boîte de réception", wait ~6 s,
    `GET ui?timeout_ms=30000`; rows show contact name, preview (`Toi ...` for messages you sent), time (`1 min`), unread count.
