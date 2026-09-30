@@ -34,6 +34,8 @@ class FakeRunner:
             pkg = a[-1]
             return 0, (f"package:/data/{pkg}/base.apk".encode() if pkg in self.packages else b""), b""
         if a[:2] == ["shell", "uiautomator"]:
+            return 0, b"UI hierchary dumped to: /sdcard/window_dump.xml", b""
+        if a[:2] == ["shell", "cat"]:
             return 0, self.ui_xml.encode(), b""
         return 0, b"", b""
 

@@ -43,6 +43,12 @@ class UiAutomator:
     def __init__(self, adb: Adb):
         self.adb = adb
 
+    DUMP_PATH = "/sdcard/window_dump.xml"
+
     def dump(self, serial: str, timeout: float) -> list[dict]:
-        out = self.adb.shell(serial, ["uiautomator", "dump", "/dev/tty"], timeout)
-        return parse_hierarchy(out)
+        # Dump to a file then cat it: `dump /dev/tty` returns nothing on some Android versions.
+        msg = self.adb.shell(serial, ["uiautomator", "dump", self.DUMP_PATH], timeout).strip()
+        if "dumped to" not in msg:
+            raise AutomationError("UI_AUTOMATION_ERROR", "UiAutomator could not dump the screen.",
+                                  {"device_output": msg[:300]})
+        return parse_hierarchy(self.adb.shell(serial, ["cat", self.DUMP_PATH], timeout))
