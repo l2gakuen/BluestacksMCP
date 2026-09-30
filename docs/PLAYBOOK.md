@@ -89,6 +89,23 @@ The chat thread is mapped below (from a screenshot: its UI dump kept timing out)
 - Bottom action row (y~1558): camera (~113), emoji (~338), send location (~562), saved phrases/quotes (~788).
 - Reading a thread: use `screenshot` (the dump is unreliable here) or `GET ui?timeout_ms=30000`.
 
+**Interest tab** (`Interest Tab`): header `Interest`, counters `Views <n>` and `Taps <n>`, a list of people who viewed/tapped
+(name + relative time: `4 min`...), `Roam`/`Fab Roam`, `Boost`, and an upsell "Débloquez tout avec l'abonnement".
+**Subscription tab** (`Onglet Abonnement`): paywall (Xtra / Unlimited plans, prices per week/month, feature list, `Continuer`).
+Read-only: never tap `Continuer` or a plan.
+
+## Quick walkthrough (do this instead of re-exploring)
+
+```bash
+export BS_TOKEN=...                                  # from the host .env, never commit
+python3 scripts/walkthrough.py --all [--show]        # ~40 s, one line per screen
+```
+Visits home, inbox, albums (+ interest, subscription with `--all`), retries flaky dumps, saves the normalized
+elements to `/tmp/bs-walk/<screen>.json` and a texts-only view to `/tmp/bs-walk/summary.json` (`[text, x, y]` in
+reading order), then returns to the home tab. It prints only counts unless `--show`. It is read-only (tab navigation
+only). Read the JSON files with a small `python3 -c` filter instead of printing them, to save tokens.
+The chat thread is not part of it (its dump times out); see "Chat thread".
+
 ## Recipes (REST `POST workflows`, or the same steps as separate tool calls)
 
 Open inbox and read the conversation list:
