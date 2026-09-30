@@ -99,5 +99,14 @@ Open a profile, write a short message, verify, then send (send only on the user'
 Then take a screenshot to confirm the text is in the field and the right person is on screen, then tap the send arrow
 (look for a `content_desc` first; fall back to (848,1551)), then screenshot again for the "Message envoyé !" toast.
 
+### Refresh profiles (profiles tab: go to top, then pull to refresh)
+1. `click_element` `{"label":"Onglet Accueil"}` (on an old host: `{"content_desc":"Onglet Accueil"}`).
+2. Go to the top: click `{"label":"revenir en haut du fil","partial":true}`; that control exists only after scrolling far
+   down, so if it is `ELEMENT_NOT_FOUND` you are already near the top: `scroll up` a few times (`distance_pct` 80).
+3. `POST actions/pull_to_refresh` (swipe from ~20% to ~60% of the screen height, 500 ms), wait ~5 s.
+4. Compare the grid usernames before/after (`POST extract`, or `GET ui`). First run showed **identical names** after the
+   pull: either nothing new or the gesture did not trigger a refresh; unconfirmed. Try a longer/slower swipe
+   (`actions/swipe` 450,400 -> 450,1200, 800 ms).
+
 ## Updating the host after code changes
 See README, "Updating the Windows host": `git fetch --depth 1 origin main` and `git checkout origin/main -- src`, then restart.
