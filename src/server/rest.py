@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 import uuid
 
+from src.core.context import request_id
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -33,6 +35,7 @@ def create_app(core: AutomationCore, settings: Settings) -> FastAPI:
         rid = request.headers.get("x-request-id", "")
         rid = rid if _RID.match(rid) else uuid.uuid4().hex
         request.state.request_id = rid
+        request_id.set(rid)
         if int(request.headers.get("content-length") or 0) > MAX_BODY:
             return JSONResponse({"error": {"code": "INVALID_ACTION", "message": "Request too large.",
                                            "details": {}}}, status_code=413, headers={"X-Request-ID": rid})
@@ -95,6 +98,11 @@ def create_app(core: AutomationCore, settings: Settings) -> FastAPI:
         guard(client, device_id, "android_dump_ui")
         return core.dump_ui(device_id)
 
+    @app.get("/api/v1/devices/{device_id}/apps")
+    def apps(device_id: str, include_system: bool = False, client: str = Depends(auth)):
+        guard(client, device_id, "android_list_apps")
+        return core.list_apps(device_id, include_system)
+
     @app.get("/api/v1/devices/{device_id}/app")
     def current_app(device_id: str, client: str = Depends(auth)):
         guard(client, device_id, "android_current_app")
@@ -125,6 +133,10 @@ def create_app(core: AutomationCore, settings: Settings) -> FastAPI:
          lambda d, b: core.wait_for_text(d, b.text, b.timeout_ms))
     post("wait/element", "android_wait_for_element", A.WaitElement,
          lambda d, b: core.wait_for_element(d, b.selector, b.timeout_ms))
+    post("actions/scroll", "android_scroll", A.Scroll, lambda d, b: core.scroll(d, b.direction, b.distance_pct))
+    post("actions/pull_to_refresh", "android_pull_to_refresh", A.Empty, lambda d, b: core.pull_to_refresh(d))
+    post("extract", "android_extract_text", A.ExtractReq, lambda d, b: core.extract_text(d, b.pattern))
+    post("workflows", "android_workflow", A.WorkflowReq, lambda d, b: core.run_workflow(core.dm.resolve(d), b.actions))
     post("find", "android_find_text", A.ClickReq,
          lambda d, b: core.find_text(d, b.text) if b.text is not None else core.find_element(d, b.selector))
 

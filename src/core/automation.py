@@ -9,6 +9,7 @@ from src.adapters.uiautomator import UiAutomator
 from src.config import Settings
 from src.core.device_manager import DeviceManager
 from src.core import selectors as sel_mod
+from src.core.context import request_id
 from src.core.errors import AutomationError
 from src.models.actions import KEYS, Selector
 
@@ -59,7 +60,7 @@ class AutomationCore:
                 code = e.code
                 raise
             finally:
-                log.info("operation=%s device_id=%s duration_ms=%d result=%s %s", op, did,
+                log.info("request_id=%s operation=%s device_id=%s duration_ms=%d result=%s %s", request_id.get(), op, did,
                          (time.monotonic() - t0) * 1000, code,
                          " ".join(f"{k}={v}" for k, v in fields.items()))
 
@@ -307,3 +308,39 @@ class AutomationCore:
             self.adb.shell(ser, ["input", "swipe", str(w // 2), str(h // 5), str(w // 2), str(h * 3 // 5), "500"],
                            self._timeout(timeout_ms) + 0.5)
         return self._result(did, "pull_to_refresh", t0)
+
+    # ---- workflows
+    MAX_WORKFLOW_STEPS = 50
+
+    def run_workflow(self, device_id, steps: list) -> dict:
+        """Run steps sequentially through this core; stop at the first failure."""
+        if len(steps) > self.MAX_WORKFLOW_STEPS:
+            raise AutomationError("INVALID_ACTION", f"Max {self.MAX_WORKFLOW_STEPS} steps.")
+        t0 = time.monotonic()
+        results = []
+        for i, st in enumerate(steps):
+            d = st.model_dump(exclude_none=True)
+            kind = d.pop("type")
+            fn = {"tap": lambda: self.tap(device_id, d["x"], d["y"]),
+                  "long_press": lambda: self.long_press(device_id, d["x"], d["y"], d.get("duration_ms", 1000)),
+                  "swipe": lambda: self.swipe(device_id, d["x1"], d["y1"], d["x2"], d["y2"], d.get("duration_ms", 300)),
+                  "type": lambda: self.type_text(device_id, d["text"]),
+                  "press": lambda: self.press(device_id, d["key"]),
+                  "click_text": lambda: self.click_text(device_id, d["text"], d.get("timeout_ms")),
+                  "click_element": lambda: self.click_element(device_id, d["selector"], d.get("timeout_ms")),
+                  "set_text": lambda: self.set_text(device_id, d["selector"], d["text"], d.get("timeout_ms")),
+                  "wait_text": lambda: self.wait_for_text(device_id, d["text"], d.get("timeout_ms")),
+                  "wait_element": lambda: self.wait_for_element(device_id, d["selector"], d.get("timeout_ms")),
+                  "launch_app": lambda: self.launch_app(device_id, d["package"]),
+                  "stop_app": lambda: self.stop_app(device_id, d["package"]),
+                  "scroll": lambda: self.scroll(device_id, d["direction"], d.get("distance_pct", 50)),
+                  "pull_to_refresh": lambda: self.pull_to_refresh(device_id)}[kind]
+            try:
+                r = fn()
+                results.append({"step": i, "type": kind, "success": True, "duration_ms": r.get("duration_ms")})
+            except AutomationError as e:
+                results.append({"step": i, "type": kind, "success": False, "error": e.to_dict()})
+                return {"success": False, "device_id": device_id, "failed_step": i, "results": results,
+                        "duration_ms": int((time.monotonic() - t0) * 1000)}
+        return {"success": True, "device_id": device_id, "results": results,
+                "duration_ms": int((time.monotonic() - t0) * 1000)}

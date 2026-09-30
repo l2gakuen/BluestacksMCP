@@ -48,3 +48,32 @@ def test_validation_and_limits(client):
 def test_request_id(client):
     assert client.get("/health", headers={"X-Request-ID": "abcdefgh1234"}).headers["x-request-id"] == "abcdefgh1234"
     assert len(client.get("/health", headers={"X-Request-ID": "bad id!"}).headers["x-request-id"]) == 32
+
+
+def test_workflow_and_new_routes(client, runner):
+    body = {"actions": [{"type": "click_text", "text": "Login"}, {"type": "type", "text": "hi"},
+                        {"type": "press", "key": "ENTER"}, {"type": "wait_text", "text": "Login", "timeout_ms": 200}]}
+    r = client.post("/api/v1/devices/bs1/workflows", json=body, headers=H).json()
+    assert r["success"] and len(r["results"]) == 4
+    body["actions"].insert(1, {"type": "click_text", "text": "Missing"})
+    r = client.post("/api/v1/devices/bs1/workflows", json=body, headers=H).json()
+    assert not r["success"] and r["failed_step"] == 1
+    assert client.post("/api/v1/devices/bs1/workflows", json={"actions": [{"type": "shell", "cmd": "x"}]},
+                       headers=H).status_code == 400
+    assert client.get("/api/v1/devices/bs1/apps", headers=H).json()["packages"] == []
+    assert client.post("/api/v1/devices/bs1/extract", json={"pattern": "^Log"}, headers=H).json()["items"]
+    assert client.post("/api/v1/devices/bs1/actions/pull_to_refresh", json={}, headers=H).status_code in (200, 502)
+
+
+def test_per_device_lock_serializes(core):
+    import threading, time
+    order = []
+    orig = core.adb.shell
+
+    def slow(serial, args, timeout):
+        order.append("start"); time.sleep(0.05); order.append("end")
+        return orig(serial, args, timeout)
+    core.adb.shell = slow
+    ts = [threading.Thread(target=core.tap, args=("bs1", 1, 1)) for _ in range(3)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    assert order == ["start", "end"] * 3

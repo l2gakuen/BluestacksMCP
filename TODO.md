@@ -5,7 +5,7 @@
 - [x] M3 Phase 2: UI dump, selectors, click/set_text/wait
 - [x] M4 Phase 3: REST API (auth, request IDs, structured errors, health)
 - [x] M5 Phase 4: MCP server (tool allowlist, bearer auth)
-- [ ] M6 Phase 5/6: logging, per-device locks, workflows, authz, README/firewall docs
+- [x] M6 Phase 5/6: logging, per-device locks, workflows, authz, README/firewall docs
 
 Deviation: UI dump uses `adb shell uiautomator dump` (UIAutomator via ADB), no
 uiautomator2 on-device server; adapter is swappable (see adapters/uiautomator.py).
