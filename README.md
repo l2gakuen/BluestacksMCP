@@ -90,3 +90,45 @@ $env:AUTOMATION_API_TOKEN
 - `$env:AUTOMATION_API_TOKEN` printing anything means a Windows environment variable overrides `.env`. Fix: `Remove-Item Env:AUTOMATION_API_TOKEN`, reopen PowerShell, restart.
 - Wrong length/ends: fix the `AUTOMATION_API_TOKEN=` line in `.env` (no quotes, no spaces), then restart.
 - Restart = stop every python process (`Get-Process python | Stop-Process`) then `.\.venv\Scripts\python.exe -m src.main`.
+
+## Updating the Windows host (unzipped folder, no clone)
+
+Only `src\` is replaced; `.env`, `config.yaml` and `.venv` are untouched. Needs Git (`winget install Git.Git`).
+
+One time, in the `bluestacks-automation` folder:
+
+```powershell
+git init
+git remote add origin https://github.com/l2gakuen/BluestacksMCP.git
+git fetch --depth 1 origin main
+git checkout origin/main -- src
+```
+
+Each update:
+
+```powershell
+git fetch --depth 1 origin main
+git checkout origin/main -- src
+```
+
+Then restart the service: Ctrl+C, then `.\.venv\Scripts\python.exe -m src.main`.
+If the repo is private, `git fetch` opens a GitHub login in the browser on first use.
+
+## Windows quick start (no install.ps1)
+
+If PowerShell blocks scripts, run this in the unzipped folder instead:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --no-index --find-links wheels -r requirements.txt
+copy .env.example .env
+copy config.example.yaml config.yaml
+.\.venv\Scripts\python.exe -c "import secrets;print(secrets.token_urlsafe(48))"
+notepad .env
+notepad config.yaml
+.\.venv\Scripts\python.exe -m src.main
+```
+
+In `.env` set `AUTOMATION_API_TOKEN=<generated token>`, `BIND_HOST=<ZeroTier IP>` and `ADB_BINARY=<full path to adb.exe>`
+(no quotes, no spaces). In `config.yaml` set `adb_endpoint: 127.0.0.1:<BlueStacks ADB port>`.
+Firewall (admin PowerShell): `New-NetFirewallRule -DisplayName "Automation ZeroTier" -Direction Inbound -Protocol TCP -LocalPort 8000,8001 -RemoteAddress 10.147.17.0/24 -Action Allow`
