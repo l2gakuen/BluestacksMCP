@@ -1,4 +1,4 @@
-"""Run from the install folder: .\.venv\Scripts\python.exe scripts\check_auth.py
+r"""Run from the install folder: .\.venv\Scripts\python.exe scripts\check_auth.py
 Shows which API token the service would load (never the full token)."""
 import os
 import sys
