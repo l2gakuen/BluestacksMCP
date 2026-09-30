@@ -75,3 +75,18 @@ Restrict with `mcp.enabled_tools` in `config.yaml`; per-client device/tool limit
 wheels + `install.ps1`). `--python` must match the Python minor version on the Windows host.
 On Windows: unzip, then `powershell -ExecutionPolicy Bypass -File install.ps1` (creates `.venv`, installs offline,
 generates the API token in `.env`). Then edit `BIND_HOST` and `config.yaml` and run `python -m src.main`.
+
+## Troubleshooting: 401 AUTHENTICATION_FAILED
+
+Run on the Windows host, in the install folder (PowerShell). Prints only the token's length and ends, never the full token:
+
+```powershell
+cd C:\path\to\bluestacks-automation
+Get-Location; Test-Path .env
+$env:AUTOMATION_API_TOKEN
+.\.venv\Scripts\python.exe -c "from src.config import load_settings; t=load_settings().api_token; print(len(t), repr(t[:4]), repr(t[-4:]))"
+```
+
+- `$env:AUTOMATION_API_TOKEN` printing anything means a Windows environment variable overrides `.env`. Fix: `Remove-Item Env:AUTOMATION_API_TOKEN`, reopen PowerShell, restart.
+- Wrong length/ends: fix the `AUTOMATION_API_TOKEN=` line in `.env` (no quotes, no spaces), then restart.
+- Restart = stop every python process (`Get-Process python | Stop-Process`) then `.\.venv\Scripts\python.exe -m src.main`.
