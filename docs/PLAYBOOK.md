@@ -140,5 +140,21 @@ Then take a screenshot to confirm the text is in the field and the right person 
    (`actions/swipe` 450,350 -> 450,1250, 1200 ms) executed fine and returned the same usernames: the gesture works,
    an unchanged grid just means the nearby profiles are the same (user confirmed). Don't treat it as a failure.
 
+### Message the first N grid profiles (verified flow, fast: dumps + activity checks, no screenshots)
+Only when the user asks for it, with their exact text. Per profile:
+1. Grid: `click_text` on the username -> wait ~4 s -> `GET app` must say `ProfilesActivity`. (Do not tap by coordinates on the
+   grid: a stale screen turns a tap into opening another person. **Never swipe left/right on a profile: the photo
+   pager is very sensitive and jumps to another profile.** Only clicks on elements.)
+2. Open the chat **from the profile**: `click_element` `{"resource_id":"com.grindrapp.android:id/quickbar_btn_chat"}`
+   (full id on old hosts) -> wait ~4 s -> activity must be `ChatActivityV2`. Only now write; not in the profile quick bar
+   (typing there was unreliable: the field stayed empty).
+3. `tap` the input (450,1474), then `type` the text (`set_text` is not reliable here), then `tap` the send arrow (840,1476).
+4. `BACK` twice (chat -> profile -> grid), check `HomeActivityOriginal`. Abort at the first unexpected activity.
+5. Verify without screenshots: inbox tab (`content_desc` "Onglet Boîte de réception") + sub-tab text "Boîte de réception", wait ~6 s,
+   `GET ui?timeout_ms=30000`; rows show contact name, preview (`Toi ...` for messages you sent), time (`1 min`), unread count.
+   A dump with ~27 elements is not the inbox yet: wait and re-dump. Return to "Onglet Accueil".
+The person may already have written first (profile label `profile_last_chatted`, chat shows their messages): check before replying.
+Keep batches small (the user asked for 3); this contacts real people through their account.
+
 ## Updating the host after code changes
 See README, "Updating the Windows host": `git fetch --depth 1 origin main` and `git checkout origin/main -- src`, then restart.
