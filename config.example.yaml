@@ -1,0 +1,8 @@
+devices:
+  - id: bluestacks-1
+    adb_endpoint: 127.0.0.1:5555
+  - id: bluestacks-2
+    adb_endpoint: 127.0.0.1:5556
+mcp:
+  enabled_tools: []   # empty = all tools enabled
+clients: {}           # optional per-client authz, see README
