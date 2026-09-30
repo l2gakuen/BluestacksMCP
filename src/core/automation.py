@@ -5,10 +5,12 @@ import time
 from contextlib import contextmanager
 
 from src.adapters.adb import Adb
+from src.adapters.uiautomator import UiAutomator
 from src.config import Settings
 from src.core.device_manager import DeviceManager
+from src.core import selectors as sel_mod
 from src.core.errors import AutomationError
-from src.models.actions import KEYS
+from src.models.actions import KEYS, Selector
 
 log = logging.getLogger("automation")
 
@@ -38,6 +40,7 @@ class AutomationCore:
         self.s = settings
         self.adb = adb or Adb(settings.adb_binary)
         self.dm = DeviceManager(settings, self.adb)
+        self.ui = UiAutomator(self.adb)
 
     # ---- helpers
     def _timeout(self, timeout_ms: int | None) -> float:
@@ -164,3 +167,81 @@ class AutomationCore:
     @staticmethod
     def png_size(png: bytes) -> tuple[int, int]:
         return int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
+
+    # ---- semantic UI
+    def _dump(self, serial: str, timeout_ms=None) -> list[dict]:
+        return self.ui.dump(serial, self._timeout(timeout_ms))
+
+    def dump_ui(self, device_id, timeout_ms=None) -> dict:
+        with self._op(device_id, "dump_ui") as (did, ser):
+            els = self._dump(ser, timeout_ms)
+        return {"device_id": did, "elements": els}
+
+    def _locate(self, ser: str, selector: Selector, wait_ms: int | None) -> dict:
+        """Poll until the selector matches or the wait budget elapses (0 polls once if wait_ms falsy)."""
+        deadline = time.monotonic() + (wait_ms or 0) / 1000
+        while True:
+            el = sel_mod.find_one(self._dump(ser), selector)
+            if el:
+                return el
+            if time.monotonic() >= deadline:
+                raise AutomationError("ELEMENT_NOT_FOUND", "No visible element matched the selector.",
+                                      {"selector": selector.model_dump(exclude_none=True)})
+            time.sleep(0.4)
+
+    def find_element(self, device_id, selector, timeout_ms=None) -> dict:
+        s = sel_mod.to_selector(selector)
+        with self._op(device_id, "find_element") as (did, ser):
+            el = self._locate(ser, s, None)
+        return {"device_id": did, "element": el}
+
+    def find_text(self, device_id, text: str, timeout_ms=None) -> dict:
+        return self.find_element(device_id, Selector(text=text), timeout_ms)
+
+    def click_element(self, device_id, selector, timeout_ms=None) -> dict:
+        s = sel_mod.to_selector(selector)
+        t0 = time.monotonic()
+        with self._op(device_id, "click_element") as (did, ser):
+            el = self._locate(ser, s, timeout_ms)
+            if not el["enabled"]:
+                raise AutomationError("ELEMENT_NOT_CLICKABLE", "Matched element is disabled.",
+                                      {"selector": s.model_dump(exclude_none=True)})
+            x, y = sel_mod.center(el)
+            self.adb.shell(ser, ["input", "tap", str(x), str(y)], self._timeout(None))
+        return self._result(did, "click_element", t0, target=s.model_dump(exclude_none=True))
+
+    def click_text(self, device_id, text: str, timeout_ms=None) -> dict:
+        r = self.click_element(device_id, Selector(text=text), timeout_ms)
+        r["action"], r["target"] = "click_text", text
+        return r
+
+    def set_text(self, device_id, selector, text: str, timeout_ms=None) -> dict:
+        s = sel_mod.to_selector(selector)
+        t0 = time.monotonic()
+        with self._op(device_id, "set_text", text_length=len(text)) as (did, ser):
+            el = self._locate(ser, s, timeout_ms)
+            x, y = sel_mod.center(el)
+            to = self._timeout(None)
+            self.adb.shell(ser, ["input", "tap", str(x), str(y)], to)
+            # clear existing content: jump to end, delete one key per char
+            self.adb.shell(ser, ["input", "keyevent", "123"] + ["67"] * len(el["text"]), to)
+            if text:
+                self.adb.shell(ser, ["input", "text", _input_escape(text)], to)
+        return self._result(did, "set_text", t0, text_length=len(text))
+
+    def wait_for_element(self, device_id, selector, timeout_ms=None) -> dict:
+        s = sel_mod.to_selector(selector)
+        t0 = time.monotonic()
+        with self._op(device_id, "wait_for_element") as (did, ser):
+            try:
+                el = self._locate(ser, s, timeout_ms or self.s.ui_wait_timeout_ms)
+            except AutomationError as e:
+                if e.code == "ELEMENT_NOT_FOUND":
+                    raise AutomationError("TIMEOUT", "Timed out waiting for element.", e.details)
+                raise
+        return self._result(did, "wait_for_element", t0, element=el)
+
+    def wait_for_text(self, device_id, text: str, timeout_ms=None) -> dict:
+        r = self.wait_for_element(device_id, Selector(text=text), timeout_ms)
+        r["action"], r["target"] = "wait_for_text", text
+        return r
