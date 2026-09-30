@@ -71,7 +71,7 @@ Restrict with `mcp.enabled_tools` in `config.yaml`; per-client device/tool limit
 
 ## Offline bundle
 
-`python scripts/package.py --python 3.11 [--with-adb]` builds `dist/bluestacks-automation.zip` (source + win_amd64
+`python scripts/package.py --python 3.11 [--with-python] [--with-adb]` builds `dist/bluestacks-automation.zip` (source + win_amd64
 wheels + `install.ps1`). `--python` must match the Python minor version on the Windows host.
 On Windows: unzip, then `powershell -ExecutionPolicy Bypass -File install.ps1` (creates `.venv`, installs offline,
 generates the API token in `.env`). Then edit `BIND_HOST` and `config.yaml` and run `python -m src.main`.

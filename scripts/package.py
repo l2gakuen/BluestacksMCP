@@ -1,6 +1,6 @@
 """Build an offline Windows bundle: dist/bluestacks-automation.zip
 
-    python scripts/package.py [--python 3.11] [--with-adb]
+    python scripts/package.py [--python 3.11] [--with-python] [--with-adb]
 
 The zip holds the source, all dependency wheels (win_amd64, for the given Python minor
 version) and install.ps1. On the Windows host: unzip, run `powershell -ExecutionPolicy Bypass -File install.ps1`.
@@ -15,6 +15,8 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+PY_VER = "3.11.9"  # last 3.11 release with a Windows installer; must match --python 3.11
+PY_URL = f"https://www.python.org/ftp/python/{PY_VER}/python-{PY_VER}-amd64.exe"
 ADB_URL = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
 # Windows-only deps that pip can't see when resolving on another OS (marker: sys_platform == 'win32')
 WIN_ONLY = ["pywin32>=311", "colorama>=0.4"]
@@ -24,8 +26,16 @@ COPY = ["src", "README.md", "spec.md", "TODO.md", "pyproject.toml",
 INSTALL_PS1 = r'''# Offline installer: creates .venv from bundled wheels, no internet needed.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-$py = (Get-Command py -ErrorAction SilentlyContinue)
-if ($py) { py -__PYVER__ -m venv .venv } else { python -m venv .venv }
+function Have-Py { try { py -__PYVER__ -c "import sys" 2>$null; return ($LASTEXITCODE -eq 0) } catch { return $false } }
+if (-not (Have-Py)) {
+    if (-not (Test-Path python-installer.exe)) { throw "Python __PYVER__ not found and no bundled installer. Install Python __PYVER__ first." }
+    $sig = Get-AuthenticodeSignature python-installer.exe
+    if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch "Python Software Foundation") { throw "python-installer.exe signature check failed" }
+    Write-Host "Installing Python (per-user, silent)..."
+    Start-Process .\python-installer.exe -ArgumentList "/quiet","InstallAllUsers=0","PrependPath=1","Include_launcher=1","Include_test=0" -Wait
+    $env:Path = [Environment]::GetEnvironmentVariable("Path","User") + ";" + [Environment]::GetEnvironmentVariable("Path","Machine")
+}
+py -__PYVER__ -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --no-index --find-links wheels -r requirements.txt
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 if (-not (Test-Path config.yaml)) { Copy-Item config.example.yaml config.yaml }
@@ -43,6 +53,7 @@ Write-Host "Your API token is in .env (AUTOMATION_API_TOKEN)."
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--python", default="3.11", help="target Windows Python minor version (wheels are per-version)")
+    ap.add_argument("--with-python", action="store_true", help=f"bundle the official Python {PY_VER} installer")
     ap.add_argument("--with-adb", action="store_true", help="bundle Google platform-tools (adb.exe)")
     a = ap.parse_args()
 
@@ -66,6 +77,11 @@ def main() -> None:
                     "-d", str(stage / "wheels"), "--platform", "win_amd64",
                     "--python-version", a.python, "--only-binary=:all:", "--implementation", "cp"],
                    check=True)
+
+    if a.with_python:
+        if not a.python.startswith("3.11"):
+            sys.exit("--with-python bundles 3.11.x; use --python 3.11")
+        urllib.request.urlretrieve(PY_URL, stage / "python-installer.exe")
 
     if a.with_adb:
         tmp = out / "platform-tools.zip"
