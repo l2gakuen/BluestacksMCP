@@ -16,12 +16,14 @@ class Selector(BaseModel):
     resource_id: str | None = None
     content_desc: str | None = None
     class_name: str | None = None
+    label: str | None = None  # matches text OR content_desc (many apps put tab/icon names in content_desc)
+    partial: bool = False  # substring match (case-insensitive) for text/content_desc/label
     index: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _nonempty(self):
-        if not any((self.text, self.resource_id, self.content_desc, self.class_name)):
-            raise ValueError("selector needs at least one of text/resource_id/content_desc/class_name")
+        if not any((self.text, self.resource_id, self.content_desc, self.class_name, self.label)):
+            raise ValueError("selector needs at least one of text/label/resource_id/content_desc/class_name")
         return self
 
 

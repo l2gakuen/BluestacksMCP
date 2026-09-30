@@ -77,3 +77,31 @@ def test_list_apps_extract_scroll(core, runner):
     sw = [c[-5:] for c in runner.calls if "swipe" in c]
     assert sw[0] == ["540", "1440", "540", "480", "400"] and sw[1][1] == "384"
     runner.__class__.__call__ = orig.__func__ if hasattr(orig, "__func__") else orig
+
+
+def test_label_partial_and_short_resource_id(core, runner):
+    assert core.find_element("bs1", {"resource_id": "login"})["element"]["text"] == "Login"  # no pkg prefix
+    assert core.find_element("bs1", {"label": "lbl"})["element"]["bounds"][1] == 400  # content_desc
+    assert core.find_element("bs1", {"label": "LOG", "partial": True})["element"]["text"] == "Login"
+    with pytest.raises(AutomationError):
+        core.find_element("bs1", {"label": "LOG"})  # exact by default
+
+
+def test_dump_retries_then_fails(core, runner):
+    calls = {"n": 0}
+    orig = runner.__class__.__call__
+
+    def flaky(self, argv, timeout):
+        if "uiautomator" in argv:
+            calls["n"] += 1
+            return (0, b"", b"") if calls["n"] < 3 else orig(self, argv, timeout)
+        return orig(self, argv, timeout)
+    runner.__class__.__call__ = flaky
+    try:
+        assert core.dump_ui("bs1")["elements"] and calls["n"] == 3
+        calls["n"] = -100
+        with pytest.raises(AutomationError) as e:
+            core.dump_ui("bs1")
+        assert e.value.code == "UI_AUTOMATION_ERROR"
+    finally:
+        runner.__class__.__call__ = orig

@@ -18,8 +18,31 @@ def to_selector(sel: Selector | dict) -> Selector:
         raise AutomationError("INVALID_SELECTOR", str(e).splitlines()[0])
 
 
+def _eq(have: str, want: str, partial: bool) -> bool:
+    return want.lower() in have.lower() if partial else have == want
+
+
 def matches(el: dict, sel: Selector) -> bool:
-    return el["visible"] and all(getattr(sel, f) is None or el[f] == getattr(sel, f) for f in FIELDS)
+    """resource_id may be given without its 'pkg:id/' prefix; `label` matches text or content_desc."""
+    if not el["visible"]:
+        return False
+    for f in FIELDS:
+        want = getattr(sel, f)
+        if want is None:
+            continue
+        have = el[f]
+        if f == "resource_id":
+            if have != want and not have.endswith("/" + want):
+                return False
+        elif f == "class_name":
+            if have != want:
+                return False
+        elif not _eq(have, want, sel.partial):
+            return False
+    if sel.label is not None and not (_eq(el["text"], sel.label, sel.partial)
+                                      or _eq(el["content_desc"], sel.label, sel.partial)):
+        return False
+    return True
 
 
 def find_all(elements: list[dict], sel: Selector) -> list[dict]:
